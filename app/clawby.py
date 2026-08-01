@@ -21,7 +21,7 @@ from . import config
 
 log = logging.getLogger("clawby")
 
-_MIN_GAP = 0.25
+_MIN_GAP = 0.1
 CALLS = 0
 CALLS_BY = {}
 _last = 0.0
@@ -130,7 +130,7 @@ async def market_by_slug(slug):
 
 
 _PX_CACHE = {}                     # token -> (monotonic_ts, result); shared by
-_PX_TTL = 8                        # engine + admin pages to halve relay load
+_PX_TTL = 1                        # engine + admin pages to halve relay load
 
 
 async def best_prices(token_id):
