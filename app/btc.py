@@ -134,14 +134,22 @@ async def _rest_refresh():
 async def ws_loop():
     global _last_price, _last_ts
     backoff = 1
-    url = "wss://stream.binance.com:9443/ws/btcusdt@trade"
+    # 优先443端口(VPN通常只代理443)，多个备用地址
+    _WS_URLS = [
+        "wss://stream.binance.com:443/ws/btcusdt@trade",
+        "wss://stream.binance.com/ws/btcusdt@trade",
+        "wss://fstream.binance.com/ws/btcusdt@trade",
+        "wss://data-stream.binance.vision/ws/btcusdt@trade",
+    ]
+    _ws_idx = 0
+    url = _WS_URLS[0]
     last_store = 0.0
     if not _buf:
         await _backfill()
     while True:
         try:
             async with websockets.connect(url, ping_interval=20, close_timeout=5) as conn:
-                log.info("btc trade stream connected")
+                log.info("btc trade stream connected: %s", url)
                 backoff = 1
                 async for raw in conn:
                     d = json.loads(raw)
@@ -160,9 +168,13 @@ async def ws_loop():
             # WS unreachable (some networks block outbound WSS to Binance):
             # poll REST at ~1s for the backoff window so the ring buffer keeps
             # its 1/s cadence on the free REST source instead of going stale.
-            log.warning("btc ws dropped: %s — REST fallback @1s for %ds", exc, backoff)
+            log.warning("btc ws dropped: %s — REST fallback @0.3s for %ds", exc, backoff)
             deadline = time.monotonic() + backoff
             while time.monotonic() < deadline:
                 await _rest_refresh()
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.3)
             backoff = min(backoff * 2, 10)
+            # 切换到下一个备用WSS地址
+            _ws_idx = (_ws_idx + 1) % len(_WS_URLS)
+            url = _WS_URLS[_ws_idx]
+            log.info("btc ws: 切换到 %s", url)
